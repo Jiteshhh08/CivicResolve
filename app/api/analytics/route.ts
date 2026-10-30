@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server"
+import { AuthUtils } from "@/lib/auth-utils"
 import { Database } from "@/lib/db"
 import { PerformanceMonitor } from "@/lib/performance"
 import { withServerCache, SERVER_CACHE_TTL } from "@/lib/server-cache"
@@ -52,6 +53,9 @@ export async function GET(request: NextRequest) {
   const endTimer = PerformanceMonitor.start('GET /api/analytics')
   
   try {
+    // Aggregate platform metrics — admin dashboard only
+    await AuthUtils.requireAdmin(request)
+
     // Check if this is a cache-busting refresh request
     const { searchParams } = new URL(request.url)
     const isRefresh = searchParams.has('_t')
@@ -195,8 +199,15 @@ export async function GET(request: NextRequest) {
     endTimer()
     return Response.json({ analytics })
   } catch (error) {
-    console.error("Error fetching analytics:", error)
     endTimer()
+    const status = (error as { status?: number })?.status
+    if (status === 401 || status === 403) {
+      return Response.json(
+        { error: status === 401 ? 'Authentication required' : 'Admin access required' },
+        { status }
+      )
+    }
+    console.error("Error fetching analytics:", error)
     return Response.json({ error: "Failed to fetch analytics" }, { status: 500 })
   }
 }

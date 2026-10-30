@@ -123,12 +123,14 @@ async function handler(request: NextRequest) {
     })
   } catch (error) {
     console.error('🚨 [VERIFY] Error:', error)
+    // Provider outage is not a client error — say so, and say which provider failed
     return NextResponse.json(
       {
-        error: 'Failed to verify issue',
-        message: error instanceof Error ? error.message : 'Unknown error',
+        error: 'Verification is temporarily unavailable',
+        message: 'The imagery or vision provider did not answer. The report itself is unaffected — verification is evidence, not a gate.',
+        detail: error instanceof Error ? error.message.slice(0, 200) : 'Unknown error',
       },
-      { status: 500 }
+      { status: 503 }
     )
   }
 }

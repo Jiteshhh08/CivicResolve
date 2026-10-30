@@ -49,3 +49,7 @@ cookies*.txt
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# tsc shim output for the verify worker
+.verify-build/
+

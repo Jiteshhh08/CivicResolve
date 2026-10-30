@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth-utils'
-import { IssueModel, UserModel, OrganizationModel, UserOrganizationModel } from '@/lib/models'
+import { IssueModel, UserModel, OrganizationModel, UserOrganizationModel, CategoryOrganizationMappingModel } from '@/lib/models'
 import { emailService } from '@/lib/email-service'
 import { serverCacheInvalidate } from '@/lib/server-cache'
 
@@ -76,6 +76,20 @@ export async function PATCH(
     }
 
     const oldStatus = currentIssue.status
+
+    // A department can only move cases in its own categories; admins can move any
+    if (user.role !== 'ADMIN') {
+      const ownsCategory = await CategoryOrganizationMappingModel.organizationHandlesCategory(
+        organizationId,
+        currentIssue.category
+      )
+      if (!ownsCategory) {
+        return NextResponse.json(
+          { error: 'This issue belongs to another department' },
+          { status: 403 }
+        )
+      }
+    }
 
     // Update the issue status
     console.log(`🔄 [STATUS UPDATE] Updating issue ${issueId} status from "${oldStatus}" to "${status}"`)

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth-utils'
 import { UserModel, OrganizationModel, UserOrganizationModel } from '@/lib/models'
-import { ollamaGenerate, OLLAMA_VISION_MODEL } from '@/lib/ollama'
+import { ollamaGenerate } from '@/lib/ollama'
 
 export async function POST(request: NextRequest) {
   try {
@@ -109,7 +109,6 @@ Only return valid JSON, no additional text.
 
     // Analyze the image with the local Ollama vision model
     const analysisText = await ollamaGenerate({
-      model: OLLAMA_VISION_MODEL,
       prompt,
       images: [imageBase64],
       format: 'json',

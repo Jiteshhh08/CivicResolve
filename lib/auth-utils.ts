@@ -135,7 +135,9 @@ export class AuthUtils {
   static async requireAuth(request: NextRequest) {
     const user = await this.getCurrentUser(request);
     if (!user) {
-      throw new Error('Authentication required');
+      const error = new Error('Authentication required') as Error & { status: number };
+      error.status = 401;
+      throw error;
     }
     return user;
   }
@@ -143,7 +145,9 @@ export class AuthUtils {
   static async requireAdmin(request: NextRequest) {
     const user = await this.requireAuth(request);
     if (user.role !== 'ADMIN') {
-      throw new Error('Admin access required');
+      const error = new Error('Admin access required') as Error & { status: number };
+      error.status = 403;
+      throw error;
     }
     return user;
   }

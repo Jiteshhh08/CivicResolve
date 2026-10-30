@@ -47,8 +47,11 @@ async function tryOla(lat: number, lng: number, radiusM: number): Promise<Street
   )
   const idPayload = Array.isArray(idRes) ? idRes[0] : idRes
   if (!idPayload || idPayload.status !== 'SUCCESS') return null
-  const payload = idPayload.payload || {}
-  const imageId = payload.imageId ?? payload.image_id ?? payload.id
+  // Ola returns payload as a bare image-id string, not an object:
+  //   {"status":"SUCCESS","payload":"ef920fee565e..."}
+  const payload = idPayload.payload
+  const imageId =
+    typeof payload === 'string' ? payload : payload?.imageId ?? payload?.image_id ?? payload?.id
   if (!imageId) return null
 
   const metaRes = await fetchJson(
@@ -180,7 +183,12 @@ export async function getStreetImageNear(
 
 /** Downloads an image and returns its base64 (JPEG assumed). */
 export async function fetchImageAsBase64(url: string, maxBytes = 10 * 1024 * 1024): Promise<string> {
-  const res = await fetch(url, {
+  // Stored URLs are site-relative ("/uploads/..."), and the worker has no request
+  // to resolve them against — so resolve here, once, for every caller.
+  const absolute = /^https?:\/\//i.test(url)
+    ? url
+    : new URL(url, process.env.INTERNAL_BASE_URL || 'http://127.0.0.1:3111').toString()
+  const res = await fetch(absolute, {
     headers: { 'User-Agent': 'CivicResolve/1.0 (civic issue verification)' },
     signal: AbortSignal.timeout(15_000),
   })

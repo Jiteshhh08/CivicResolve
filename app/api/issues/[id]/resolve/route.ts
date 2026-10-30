@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth-utils'
-import { IssueModel, UserModel, OrganizationModel, UserOrganizationModel } from '@/lib/models'
+import { IssueModel, UserModel, OrganizationModel, UserOrganizationModel, CategoryOrganizationMappingModel } from '@/lib/models'
 import { emailService } from '@/lib/email-service'
 import { serverCacheInvalidate } from '@/lib/server-cache'
 
@@ -52,6 +52,29 @@ export async function POST(
     if (currentIssue.status === 'RESOLVED') {
       return NextResponse.json(
         { error: 'Issue is already resolved' },
+        { status: 400 }
+      )
+    }
+
+    // Only a department that actually owns this category may close the case
+    const ownsCategory = await CategoryOrganizationMappingModel.organizationHandlesCategory(
+      organizationId,
+      currentIssue.category
+    )
+    if (!ownsCategory) {
+      return NextResponse.json(
+        { error: 'This issue belongs to another department' },
+        { status: 403 }
+      )
+    }
+
+    // Resolution is only valid from IN_PROGRESS — say so instead of failing deeper in
+    if (currentIssue.status !== 'IN_PROGRESS') {
+      return NextResponse.json(
+        {
+          error: 'Issue must be in progress before it can be resolved',
+          currentStatus: currentIssue.status,
+        },
         { status: 400 }
       )
     }

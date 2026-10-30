@@ -57,9 +57,13 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     endTimer()
     logger.error('Error fetching duplicate review queue', error instanceof Error ? error : undefined, 'admin')
-    
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return Response.json({ error: 'Authentication required' }, { status: 401 })
+
+    const status = (error as { status?: number })?.status
+    if (status === 401 || status === 403) {
+      return Response.json(
+        { error: status === 401 ? 'Authentication required' : 'Admin access required' },
+        { status }
+      )
     }
 
     return Response.json(

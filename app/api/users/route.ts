@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from 'next/server'
 import { Database } from "@/lib/database"
 import { PerformanceMonitor } from "@/lib/performance"
-import { getAuthUser } from '@/lib/auth-utils'
+import { getAuthUser, AuthUtils } from '@/lib/auth-utils'
 import { UserModel } from '@/lib/models'
 import { withServerCache, SERVER_CACHE_TTL } from '@/lib/server-cache'
 
@@ -11,6 +11,9 @@ export async function GET(request: NextRequest) {
   const endTimer = PerformanceMonitor.start('GET /api/users')
   
   try {
+    // Admin-only: this returns every account's email, role and activity
+    await AuthUtils.requireAdmin(request)
+
     const data = await withServerCache(
       'users:all-with-stats',
       async () => {
@@ -99,9 +102,15 @@ export async function GET(request: NextRequest) {
     endTimer()
     return Response.json(data)
   } catch (error) {
-    console.error("Error fetching users:", error)
-    console.error("Error details:", JSON.stringify(error, null, 2))
     endTimer()
+    const status = (error as { status?: number })?.status
+    if (status === 401 || status === 403) {
+      return Response.json(
+        { error: status === 401 ? 'Authentication required' : 'Admin access required' },
+        { status }
+      )
+    }
+    console.error("Error fetching users:", error)
     return Response.json({ error: "Failed to fetch users" }, { status: 500 })
   }
 }

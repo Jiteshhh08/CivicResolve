@@ -1238,6 +1238,19 @@ export class CategoryOrganizationMappingModel {
     return await Database.query(sql, [category]);
   }
 
+  /**
+   * Authorization check for department staff: does this organisation own the
+   * category the issue sits in? Issues carry no organization_id, they are routed
+   * by category, so ownership has to be resolved through the mapping table.
+   */
+  static async organizationHandlesCategory(organizationId: number, category: string): Promise<boolean> {
+    const row = await Database.queryOne<{ id: number }>(
+      'SELECT id FROM category_organization_mappings WHERE organization_id = ? AND category = ? LIMIT 1',
+      [organizationId, category]
+    );
+    return !!row;
+  }
+
   static async getByOrganization(organizationId: number): Promise<CategoryOrganizationMapping[]> {
     const sql = 'SELECT * FROM category_organization_mappings WHERE organization_id = ? ORDER BY category ASC';
     return await Database.query(sql, [organizationId]);

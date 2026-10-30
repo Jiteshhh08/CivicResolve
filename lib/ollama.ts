@@ -39,14 +39,18 @@ export function activeChatModel(): string {
 }
 
 export async function ollamaGenerate(opts: OllamaGenerateOptions): Promise<string> {
+  // Local Ollama is optional and off by default: this deployment runs on the
+  // CoE AI gateway. Only use a local model when OLLAMA_URL is explicitly set.
+  const localEnabled = !!process.env.OLLAMA_URL
   const forceLocal = opts.images?.length && VISION_PROVIDER === 'local'
-  if (!COE_API_KEY && !OPENCODE_API_KEY) return ollamaGenerateFallback(opts)
-  if (forceLocal) return ollamaGenerateFallback(opts)
-  // Provider chain: CoE gateway -> opencode gateway -> local Ollama.
+  if (forceLocal && localEnabled) return ollamaGenerateFallback(opts)
+  // Provider chain: CoE gateway -> opencode gateway -> (optional) local Ollama.
+  const failures: string[] = []
   if (COE_API_KEY) {
     try {
       return await coeGenerate(opts)
     } catch (err) {
+      failures.push(`CoE: ${(err as Error).message}`)
       console.warn(`[AI] CoE gateway failed (${(err as Error).message}) — trying opencode`)
     }
   }
@@ -54,10 +58,14 @@ export async function ollamaGenerate(opts: OllamaGenerateOptions): Promise<strin
     try {
       return await opencodeGenerate(opts)
     } catch (err) {
-      console.warn(`[AI] opencode gateway failed (${(err as Error).message}) — falling back to Ollama`)
+      failures.push(`opencode: ${(err as Error).message}`)
+      console.warn(`[AI] opencode gateway failed (${(err as Error).message})`)
     }
   }
-  return ollamaGenerateFallback(opts)
+  if (localEnabled) return ollamaGenerateFallback(opts)
+  // Nothing answered: say exactly that, so callers can degrade honestly
+  // instead of surfacing a 404 from a provider that was never configured.
+  throw new Error(`No AI provider available (${failures.join('; ') || 'no provider configured'})`)
 }
 
 // CoE AI Gateway — OpenAI-compatible /chat/completions (Qwen3.6, single model).
@@ -180,6 +188,9 @@ async function ollamaGenerateFallback(opts: OllamaGenerateOptions): Promise<stri
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    // Last-resort provider: a vision pass on the local box can take 90s+.
+    // Cap it so a dead fallback surfaces as an error instead of a hung request.
+    signal: AbortSignal.timeout(120_000),
   })
   if (!res.ok) {
     const detail = await res.text().catch(() => '')

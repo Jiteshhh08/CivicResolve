@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getAuthUser } from "@/lib/auth-utils"
-import { UserModel } from "@/lib/models"
+import { UserModel, IssueModel, CategoryOrganizationMappingModel } from "@/lib/models"
 import { db } from "@/lib/db"
 
 export async function POST(
@@ -36,6 +36,16 @@ export async function POST(
     const assigneeOrgId = await UserModel.getUserOrganizationId(parseInt(assignedTo))
     if (!assigneeOrgId || assigneeOrgId !== userOrgId) {
       return NextResponse.json({ error: "Cannot assign to user outside your organization" }, { status: 403 })
+    }
+
+    // ...and that the case is actually this department's to assign
+    const issue = await IssueModel.findById(issueId)
+    if (!issue) {
+      return NextResponse.json({ error: "Issue not found" }, { status: 404 })
+    }
+    const ownsCategory = await CategoryOrganizationMappingModel.organizationHandlesCategory(userOrgId, issue.category)
+    if (!ownsCategory) {
+      return NextResponse.json({ error: "This issue belongs to another department" }, { status: 403 })
     }
 
     // Update the issue assignment

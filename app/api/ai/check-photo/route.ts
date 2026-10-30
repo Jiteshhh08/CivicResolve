@@ -78,7 +78,7 @@ async function handler(req: NextRequest) {
 
     for (const row of rows) {
       const other = await fetchImageAsBase64(
-        row.image_url.startsWith('/') ? `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3111'}${row.image_url}` : row.image_url
+        row.image_url.startsWith('/') ? `${process.env.INTERNAL_BASE_URL || 'http://127.0.0.1:3111'}${row.image_url}` : row.image_url
       ).catch(() => null)
       if (!other) continue
       const distance = hammingDistance(imageHash, await hashImage(other))
