@@ -173,7 +173,7 @@ export default function NGOManagementPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="container mx-auto px-4 py-8 space-y-6">
         <PageHeader title="NGO Management" icon={Heart} />
         <div className="text-center py-8">Loading...</div>
       </div>
@@ -181,7 +181,7 @@ export default function NGOManagementPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto px-4 py-8 space-y-6">
       {/* Header */}
       <PageHeader
         title="NGO Management"

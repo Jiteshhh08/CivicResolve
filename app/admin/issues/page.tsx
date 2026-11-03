@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { Search, Filter, Download, Edit, Eye, MoreHorizontal, AlertCircle, Clock, CheckCircle, Trash2, Bot } from "lucide-react"
@@ -34,6 +34,15 @@ export default function AdminIssuesPage() {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [statusCounts, setStatusCounts] = useState({
+    all: 0,
+    PENDING: 0,
+    IN_PROGRESS: 0,
+    RESOLVED: 0,
+    UNDER_APPEAL: 0,
+  })
+  const issuesRequestId = useRef(0)
+  const countsRequestId = useRef(0)
   type Stats = {
     inProgressIssues: number;
     pendingIssues: number;
@@ -60,13 +69,15 @@ export default function AdminIssuesPage() {
     issue?: Issue
   }>({ isOpen: false })
 
-  // Calculate dynamic status counts
-  const statusCounts = {
-    all: stats.totalCount,
-    PENDING: stats.pendingIssues,
-    IN_PROGRESS: stats.inProgressIssues,
-    RESOLVED: stats.resolvedIssues,
-    UNDER_APPEAL: stats.underAppealIssues,
+  const buildIssuesQuery = (page: number, includeStatus = true, limit = pageSize) => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String((page - 1) * limit),
+    })
+    if (debouncedSearchTerm) params.set("search", debouncedSearchTerm)
+    if (selectedCategory !== "all") params.set("category", selectedCategory)
+    if (includeStatus && activeTab !== "all") params.set("status", activeTab)
+    return params.toString()
   }
 
   const statusTabs = [
@@ -79,8 +90,13 @@ export default function AdminIssuesPage() {
 
   useEffect(() => {
     setCurrentPage(1)
+    setTotalPages(1)
     fetchIssues(1)
-  }, [debouncedSearchTerm])
+  }, [debouncedSearchTerm, selectedCategory, activeTab])
+
+  useEffect(() => {
+    fetchStatusCounts()
+  }, [debouncedSearchTerm, selectedCategory])
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -90,58 +106,81 @@ export default function AdminIssuesPage() {
     return () => clearTimeout(handler); // cleanup on every keystroke
   }, [searchQuery]);
 
-  const fetchIssues = async (page = 1) => {
+  const fetchIssues = async (page = 1, showLoading = true) => {
+    const requestId = ++issuesRequestId.current
     try {
-      setLoading(true)
-      const response = await fetch(`/api/issues?limit=${pageSize}&offset=${(page - 1) * pageSize}&search=${debouncedSearchTerm}`)
+      if (showLoading) setLoading(true)
+      const response = await fetch(`/api/issues?${buildIssuesQuery(page)}`)
 
       if (!response.ok) {
         throw new Error('Failed to fetch issues')
       }
 
       const data = await response.json()
-      const stats = data.stats;
+      if (requestId !== issuesRequestId.current) return
+
+      const nextTotalPages = data.totalPages || 0
+      const nextPage = nextTotalPages > 0 ? Math.min(data.currentPage || 1, nextTotalPages) : 1
+
+      // If a delete or status change removed the requested page, move to the last available page.
+      if (nextTotalPages > 0 && page > nextTotalPages) {
+        return fetchIssues(nextTotalPages, showLoading)
+      }
+
+      const listStats = data.stats || {};
       setIssues(data.issues || [])
-      setStats({ totalCount: data.totalCount, ...stats });
-      setTotalPages(data.totalPages);
-      setCurrentPage(data.currentPage);
+      setStats({ totalCount: data.totalCount || 0, ...listStats });
+      setTotalPages(nextTotalPages);
+      setCurrentPage(nextPage);
     } catch (error) {
-      console.error('Error fetching issues:', error)
+      if (requestId === issuesRequestId.current) {
+        console.error('Error fetching issues:', error)
+      }
     } finally {
-      setLoading(false)
+      if (requestId === issuesRequestId.current) {
+        setLoading(false)
+      }
+    }
+  }
+
+  const fetchStatusCounts = async () => {
+    const requestId = ++countsRequestId.current
+    try {
+      const response = await fetch(`/api/issues?${buildIssuesQuery(1, false, 1)}`)
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch issue counts')
+      }
+
+      const data = await response.json()
+      if (requestId !== countsRequestId.current) return
+
+      const counts = data.stats || {};
+      setStatusCounts({
+        all: data.totalCount || 0,
+        PENDING: counts.pendingIssues || 0,
+        IN_PROGRESS: counts.inProgressIssues || 0,
+        RESOLVED: counts.resolvedIssues || 0,
+        UNDER_APPEAL: counts.underAppealIssues || 0,
+      })
+    } catch (error) {
+      if (requestId === countsRequestId.current) {
+        console.error('Error fetching issue counts:', error)
+      }
     }
   }
 
   const handlePageChange = (page: number) => {
+    if (page < 1 || page > totalPages || page === currentPage) return
     fetchIssues(page)
   }
 
   const refreshIssues = async () => {
-    try {
-      const response = await fetch(`/api/issues?limit=${pageSize}&offset=${(currentPage - 1) * pageSize}&search=${debouncedSearchTerm}`)
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch issues')
-      }
-
-      const data = await response.json()
-      setIssues(data.issues || [])
-    } catch (error) {
-      console.error('Error refreshing issues:', error)
-    }
+    await fetchIssues(currentPage, false)
+    fetchStatusCounts()
   }
 
-  const filteredIssues = issues.filter((issue) => {
-    const matchesStatus = activeTab === "all" || issue.status === activeTab
-    const matchesCategory = selectedCategory === "all" || issue.category === selectedCategory
-    // const matchesSearch =
-    //   searchQuery === "" ||
-    //   issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    //   issue.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    //   issue.reporter.name.toLowerCase().includes(searchQuery.toLowerCase())
-
-    return matchesStatus && matchesCategory
-  })
+  const filteredIssues = issues
 
   const handleStatusUpdate = async (issueId: string, newStatus: IssueStatus) => {
     try {
@@ -285,16 +324,16 @@ export default function AdminIssuesPage() {
           <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Issues ({filteredIssues.length})</span>
+                <span>Issues ({stats.totalCount})</span>
                 <div className="flex gap-2">
                   <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                    {issues.filter((i) => i.status === "PENDING").length} Pending
+                    {statusCounts.PENDING} Pending
                   </Badge>
                   <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                    {issues.filter((i) => i.status === "IN_PROGRESS").length} In Progress
+                    {statusCounts.IN_PROGRESS} In Progress
                   </Badge>
                   <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                    {issues.filter((i) => i.status === "RESOLVED").length} Resolved
+                    {statusCounts.RESOLVED} Resolved
                   </Badge>
                 </div>
               </CardTitle>

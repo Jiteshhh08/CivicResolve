@@ -101,7 +101,7 @@ export default function AdminAppealsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="container mx-auto px-4 py-8 space-y-6">
         <PageHeader 
           title="Appeal Management" 
           description="Review and manage citizen appeals"
@@ -114,7 +114,7 @@ export default function AdminAppealsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto px-4 py-8 space-y-6">
       <PageHeader 
         title="Appeal Management" 
         description="Review and manage citizen appeals for issue decisions"

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { motion } from "framer-motion"
-import { Menu, X, MapPin, PlusCircle, User, LogOut, Settings, BarChart3, Download, Smartphone, Building2, Users2, Heart, AlertTriangle, Radar, ShieldCheck } from "lucide-react"
+import { Menu, X, MapPin, PlusCircle, User, LogOut, Settings, BarChart3, Download, Smartphone, Building2, Users2, Heart, AlertTriangle, Radar, ShieldCheck, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -110,7 +110,7 @@ export function Navbar() {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2">
+          <Link href="/" className="flex shrink-0 items-center space-x-2">
             <div className="w-8 h-8 rounded-lg overflow-hidden">
               <Image
                 src="/icons/logo.png"
@@ -124,47 +124,73 @@ export function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex items-center gap-5">
             {user && (
               <>
-                    {navigation.map((item) => (
-                      <Link
-                        key={item.name}
-                        href={item.href}
-                        className="flex items-center space-x-1 text-gray-600 hover:text-blue-600 transition-colors"
-                      >
-                        {item.icon && <item.icon className="h-4 w-4" />}
-                        <span>{item.name}</span>
-                      </Link>
-                    ))}                {user.role === "ADMIN" && (
+                {navigation.map((item) => (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className="flex items-center gap-1 whitespace-nowrap text-gray-600 hover:text-blue-600 transition-colors"
+                  >
+                    {item.icon && <item.icon className="h-4 w-4" />}
+                    <span>{item.name}</span>
+                  </Link>
+                ))}
+
+                {user.role === "ADMIN" && (
                   <>
                     <div className="w-px h-6 bg-gray-300" />
-                    {adminNavigation.map((item) => (
-                      <Link
-                        key={item.name}
-                        href={item.href}
-                        className="flex items-center space-x-1 text-gray-600 hover:text-blue-600 transition-colors"
-                      >
-                        {item.icon && <item.icon className="h-4 w-4" />}
-                        <span>{item.name}</span>
-                      </Link>
-                    ))}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 whitespace-nowrap rounded-md px-1 py-1 text-gray-600 transition-colors hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                        >
+                          <ShieldCheck className="h-4 w-4" />
+                          <span>Admin</span>
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        {adminNavigation.map((item) => (
+                          <DropdownMenuItem key={item.name} asChild>
+                            <Link href={item.href} className="flex w-full cursor-pointer items-center">
+                              <item.icon className="mr-2 h-4 w-4" />
+                              {item.name}
+                            </Link>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </>
                 )}
 
                 {user.role === "ORGANIZATION_ADMIN" && (
                   <>
                     <div className="w-px h-6 bg-gray-300" />
-                    {organizationAdminNavigation.map((item) => (
-                      <Link
-                        key={item.name}
-                        href={item.href}
-                        className="flex items-center space-x-1 text-gray-600 hover:text-blue-600 transition-colors"
-                      >
-                        {item.icon && <item.icon className="h-4 w-4" />}
-                        <span>{item.name}</span>
-                      </Link>
-                    ))}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 whitespace-nowrap rounded-md px-1 py-1 text-gray-600 transition-colors hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                        >
+                          <Building2 className="h-4 w-4" />
+                          <span>Organization</span>
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        {organizationAdminNavigation.map((item) => (
+                          <DropdownMenuItem key={item.name} asChild>
+                            <Link href={item.href} className="flex w-full cursor-pointer items-center">
+                              <item.icon className="mr-2 h-4 w-4" />
+                              {item.name}
+                            </Link>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </>
                 )}
 
@@ -175,7 +201,7 @@ export function Navbar() {
                       <Link
                         key={item.name}
                         href={item.href}
-                        className="flex items-center space-x-1 text-gray-600 hover:text-blue-600 transition-colors"
+                        className="flex items-center gap-1 whitespace-nowrap text-gray-600 hover:text-blue-600 transition-colors"
                       >
                         {item.icon && <item.icon className="h-4 w-4" />}
                         <span>{item.name}</span>

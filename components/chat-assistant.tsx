@@ -187,6 +187,7 @@ export function ChatAssistant() {
         className={`max-w-md p-0 transition-all duration-200 flex flex-col ${
           isMinimized ? 'h-16' : 'h-[600px]'
         }`}
+        showCloseButton={false}
         onPointerDownOutside={(e) => e.preventDefault()}
       >
         <DialogHeader className="flex flex-row items-center justify-between p-4 pb-2 flex-shrink-0">
@@ -208,6 +209,7 @@ export function ChatAssistant() {
               size="sm"
               onClick={() => setIsOpen(false)}
               className="h-8 w-8 p-0"
+              aria-label="Close assistant"
             >
               <X className="h-4 w-4" />
             </Button>

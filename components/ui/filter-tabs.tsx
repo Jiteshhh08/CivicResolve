@@ -28,11 +28,14 @@ export function FilterTabs({ tabs, activeTab, onTabChange, className }: FilterTa
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={() => onTabChange(tab.id)}
+          aria-pressed={activeTab === tab.id}
           className={cn(
             "relative px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200",
             "border border-gray-200 bg-white/80 backdrop-blur-sm touch-target-small",
-            "hover:bg-white hover:shadow-sm min-h-touch",
-            activeTab === tab.id && "bg-blue-600 text-white border-blue-600 shadow-sm",
+            "min-h-touch focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
+            activeTab === tab.id
+              ? "bg-blue-600 text-white border-blue-600 shadow-sm hover:bg-blue-700 hover:shadow-md"
+              : "hover:bg-white hover:shadow-sm",
           )}
         >
           <span className="whitespace-nowrap">{tab.label}</span>

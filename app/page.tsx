@@ -35,6 +35,15 @@ export default function HomePage() {
     totalVotes: 0,
     totalComments: 0
   })
+  const [categoryCounts, setCategoryCounts] = useState({
+    all: 0,
+    ROADS: 0,
+    LIGHTING: 0,
+    SANITATION: 0,
+    PARKS: 0,
+    UTILITIES: 0,
+    SAFETY: 0,
+  })
   const [dashboardStats, setDashboardStats] = useState({
     totalIssues: 0,
     resolvedIssues: 0,
@@ -52,16 +61,32 @@ export default function HomePage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const pageSize = 10
+  const issuesRequestId = useRef(0)
+  const countsRequestId = useRef(0)
+  const categoryCountsRequestId = useRef(0)
   const observerRef = useRef<IntersectionObserver | null>(null)
   const anchorRef = useRef<HTMLDivElement | null>(null)
+
+  const buildIssuesQuery = useCallback((page: number, includeStatus = true, limit = pageSize) => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String((page - 1) * limit),
+    })
+    if (debouncedSearchTerm) params.set("search", debouncedSearchTerm)
+    if (activeCategoryTab !== "all") params.set("category", activeCategoryTab)
+    if (includeStatus && activeStatusTab !== "all") params.set("status", activeStatusTab)
+    return params.toString()
+  }, [debouncedSearchTerm, activeCategoryTab, activeStatusTab, pageSize])
+
   useEffect(() => {
-    const fetchData = async (page = 1) => {
+    const fetchData = async () => {
+      const requestId = ++issuesRequestId.current
       try {
         setLoading(true)
 
         // Fetch issues and dashboard stats in parallel
         const [issuesResponse, statsResponse] = await Promise.all([
-          fetch(`/api/issues?limit=${pageSize}&offset=${(page - 1) * pageSize}&search=${debouncedSearchTerm}`),
+          fetch(`/api/issues?${buildIssuesQuery(1)}`),
           fetch('/api/dashboard/stats')
         ])
 
@@ -70,10 +95,12 @@ export default function HomePage() {
         }
 
         const issuesData = await issuesResponse.json()
-        const fetchedIssues = issuesData.issues || []
-        setIssues(fetchedIssues)
-        setTotalPages(issuesData.totalPages);
-        setCurrentPage(1); // Always start from page 1 for initial fetch
+        if (requestId !== issuesRequestId.current) return
+
+        setIssues(issuesData.issues || [])
+        setTotalPages(issuesData.totalPages || 0)
+        setCurrentPage(issuesData.currentPage || 1)
+
         // Set dashboard stats from API if successful
         if (statsResponse.ok) {
           const statsData = await statsResponse.json()
@@ -81,82 +108,134 @@ export default function HomePage() {
             setDashboardStats(statsData.stats)
           }
         }
-
-        // Calculate dynamic stats for filtering
-        const totalIssues = issuesData.totalCount
-        const resolvedIssues = issuesData.stats.resolvedIssues
-        const pendingIssues = issuesData.stats.pendingIssues
-        const inProgressIssues =  issuesData.stats.inProgressIssues
-        const totalVotes = issuesData.stats.totalVotes
-        const totalComments = issuesData.stats.totalComments
-        // const resolvedIssues = fetchedIssues.filter((issue: Issue) => issue.status === "RESOLVED").length
-        // const pendingIssues = fetchedIssues.filter((issue: Issue) => issue.status === "PENDING").length
-        // const inProgressIssues = fetchedIssues.filter((issue: Issue) => issue.status === "IN_PROGRESS").length
-        // const totalVotes = fetchedIssues.reduce((sum: number, issue: Issue) => sum + (issue.votes_count || 0), 0)
-        // const totalComments = fetchedIssues.reduce((sum: number, issue: Issue) => sum + (issue.comments_count || 0), 0)
-
-        setStats({
-          totalIssues,
-          resolvedIssues,
-          pendingIssues,
-          inProgressIssues,
-          totalVotes,
-          totalComments
-        })
       } catch (error) {
-        console.error('Error fetching data:', error)
-        setIssues([])
+        if (requestId === issuesRequestId.current) {
+          console.error('Error fetching data:', error)
+          setIssues([])
+        }
       } finally {
-        setLoading(false)
+        if (requestId === issuesRequestId.current) {
+          setLoading(false)
+        }
       }
     }
 
     fetchData()
+  }, [buildIssuesQuery])
+
+  // Status counts are calculated without the status filter so the other tabs keep useful totals.
+  useEffect(() => {
+    const fetchStatusCounts = async () => {
+      const requestId = ++countsRequestId.current
+      try {
+        const response = await fetch(`/api/issues?${buildIssuesQuery(1, false, 1)}`)
+        if (!response.ok) return
+
+        const data = await response.json()
+        if (requestId !== countsRequestId.current) return
+
+        const counts = data.stats || {}
+        setStats({
+          totalIssues: data.totalCount || 0,
+          resolvedIssues: counts.resolvedIssues || 0,
+          pendingIssues: counts.pendingIssues || 0,
+          inProgressIssues: counts.inProgressIssues || 0,
+          totalVotes: counts.totalVotes || 0,
+          totalComments: counts.totalComments || 0,
+        })
+      } catch (error) {
+        console.error('Error fetching issue counts:', error)
+      }
+    }
+
+    fetchStatusCounts()
+  }, [buildIssuesQuery])
+
+  // Category counts are fetched separately so selecting a category does not zero out the other tabs.
+  useEffect(() => {
+    const fetchCategoryCounts = async () => {
+      const requestId = ++categoryCountsRequestId.current
+      const categories = ["ROADS", "LIGHTING", "SANITATION", "PARKS", "UTILITIES", "SAFETY"] as const
+      const searchParam = debouncedSearchTerm ? `&search=${encodeURIComponent(debouncedSearchTerm)}` : ""
+      try {
+        const responses = await Promise.all([
+          fetch(`/api/issues?limit=1${searchParam}`),
+          ...categories.map((category) => fetch(`/api/issues?limit=1&category=${category}${searchParam}`)),
+        ])
+        if (requestId !== categoryCountsRequestId.current) return
+
+        const payloads = await Promise.all(
+          responses.map((response) => (response.ok ? response.json() : Promise.resolve(null)))
+        )
+        if (requestId !== categoryCountsRequestId.current) return
+
+        const [allData, ...categoryData] = payloads
+        const countFor = (index: number) => categoryData[index]?.totalCount || 0
+        setCategoryCounts({
+          all: allData?.totalCount || 0,
+          ROADS: countFor(0),
+          LIGHTING: countFor(1),
+          SANITATION: countFor(2),
+          PARKS: countFor(3),
+          UTILITIES: countFor(4),
+          SAFETY: countFor(5),
+        })
+      } catch (error) {
+        console.error('Error fetching category counts:', error)
+      }
+    }
+
+    fetchCategoryCounts()
   }, [debouncedSearchTerm])
 
-  // Reset pagination and clear issues when search changes
+  // Reset pagination and clear issues when a filter or search changes
   useEffect(() => {
     setCurrentPage(1)
     setIssues([])
     setTotalPages(1)
+    setLoadingMore(false)
     if (observerRef.current) {
       observerRef.current.disconnect()
       observerRef.current = null
     }
-  }, [debouncedSearchTerm])
+  }, [debouncedSearchTerm, activeStatusTab, activeCategoryTab])
 
   //for infinite-scrolling
   const fetchIssues = useCallback(async (page = 1) => {
-    try {
-      // Double-check conditions before proceeding
-      if (loadingMore || currentPage >= totalPages) {
-        return;
-      }
+    // Double-check conditions before proceeding
+    if (loadingMore || currentPage >= totalPages) {
+      return;
+    }
 
+    const requestId = ++issuesRequestId.current
+    try {
       setLoadingMore(true)
       
-      const response = await fetch(
-        `/api/issues?limit=${pageSize}&offset=${(page - 1) * pageSize}&search=${debouncedSearchTerm}`
-      )
+      const response = await fetch(`/api/issues?${buildIssuesQuery(page)}`)
 
       if (!response.ok) {
         throw new Error('Failed to fetch issues')
       }
 
       const data = await response.json()
-      
+      if (requestId !== issuesRequestId.current) return
+
       setIssues((prev) => {
         const updated = [...prev, ...(data.issues || [])];
         return updated;
       })  
-      setTotalPages(data.totalPages)
-      setCurrentPage(data.currentPage)
+      setTotalPages(data.totalPages || 0)
+      setCurrentPage(data.currentPage || 1)
     } catch (error) {
-      console.error('Error fetching issues:', error)
+      if (requestId === issuesRequestId.current) {
+        console.error('Error fetching issues:', error)
+      }
     } finally {
-      setLoadingMore(false)
+      if (requestId === issuesRequestId.current) {
+        setLoadingMore(false)
+      }
     }
-  }, [pageSize, debouncedSearchTerm, loadingMore, currentPage, totalPages])
+  }, [buildIssuesQuery, loadingMore, currentPage, totalPages])
 
   useEffect(() => {
     // Add a small delay to ensure DOM is ready
@@ -257,17 +336,7 @@ export default function HomePage() {
     { id: "RESOLVED", label: "Resolved", count: stats.resolvedIssues },
   ]
 
-  // Calculate category counts
-  const categoryCounts = {
-    all: issues.length,
-    ROADS: issues.filter(issue => issue.category === "ROADS").length,
-    LIGHTING: issues.filter(issue => issue.category === "LIGHTING").length,
-    SANITATION: issues.filter(issue => issue.category === "SANITATION").length,
-    PARKS: issues.filter(issue => issue.category === "PARKS").length,
-    UTILITIES: issues.filter(issue => issue.category === "UTILITIES").length,
-    SAFETY: issues.filter(issue => issue.category === "SAFETY").length,
-  }
-
+  // Category tabs
   const categoryTabs = [
     { id: "all", label: "All Categories", count: categoryCounts.all },
     { id: "ROADS", label: "Roads", count: categoryCounts.ROADS },
@@ -278,16 +347,7 @@ export default function HomePage() {
     { id: "SAFETY", label: "Safety", count: categoryCounts.SAFETY },
   ]
 
-  const filteredIssues = issues.filter((issue) => {
-    const matchesStatus = activeStatusTab === "all" || issue.status === activeStatusTab
-    const matchesCategory = activeCategoryTab === "all" || issue.category === activeCategoryTab
-    // const matchesSearch =
-    //   searchQuery === "" ||
-    //   issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    //   issue.description.toLowerCase().includes(searchQuery.toLowerCase())
-
-    return matchesStatus && matchesCategory
-  })
+  const filteredIssues = issues
 
   if (isLoading) {
     return (

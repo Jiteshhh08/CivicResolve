@@ -154,11 +154,9 @@ export function NotificationBell() {
           <>
             <DropdownMenuSeparator />
             <div className="p-2">
-              <Link href="/organization/issues">
-                <Button variant="ghost" className="w-full text-sm">
-                  View All Issues
-                </Button>
-              </Link>
+              <Button variant="secondary" className="w-full text-sm" asChild>
+                <Link href="/organization/issues">View All Issues</Link>
+              </Button>
             </div>
           </>
         )}
