@@ -300,6 +300,29 @@ export default function IssueDetailPage({ params }: IssueDetailPageProps) {
               description={`Issue #${issue.id} • Reported ${formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}`}
             />
 
+            {/* Duplicate Banner — this report was merged into another */}
+            {(issue as any).parentIssue && (
+              <div className="mt-4 p-4 rounded-lg bg-amber-50 border border-amber-200">
+                <div className="flex items-start gap-3">
+                  <Anchor className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                        Duplicate
+                      </span>
+                    </div>
+                    <p className="text-sm text-amber-900">
+                      This report was marked as the same problem as{' '}
+                      <Link href={`/issues/${(issue as any).parentIssue.id}`} className="font-medium underline">
+                        #{ (issue as any).parentIssue.id } {(issue as any).parentIssue.title}
+                      </Link>
+                      . Status updates continue on that report.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Root Issue Banner */}
             {!(issue as any).parentIssue && (issue as any).linkedIssues && (issue as any).linkedIssues.length > 0 && (
               <div className="mt-4 p-4 rounded-lg bg-green-50 border border-green-200">

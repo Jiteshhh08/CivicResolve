@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth-utils'
 import { IssueModel, UserModel, OrganizationModel, UserOrganizationModel, CategoryOrganizationMappingModel } from '@/lib/models'
 import { emailService } from '@/lib/email-service'
 import { serverCacheInvalidate } from '@/lib/server-cache'
+import { notifyStatusChange } from '@/lib/whatsapp-notify'
 
 export async function PATCH(
   request: NextRequest,
@@ -18,9 +19,9 @@ export async function PATCH(
       )
     }
 
-    // Check if user is part of an organization
+    // Admins act globally; staff must belong to a department to move a case.
     const organizationId = await UserModel.getUserOrganizationId(user.id)
-    if (!organizationId) {
+    if (!organizationId && user.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'User is not associated with any organization' },
         { status: 400 }
@@ -80,7 +81,7 @@ export async function PATCH(
     // A department can only move cases in its own categories; admins can move any
     if (user.role !== 'ADMIN') {
       const ownsCategory = await CategoryOrganizationMappingModel.organizationHandlesCategory(
-        organizationId,
+        organizationId as number,
         currentIssue.category
       )
       if (!ownsCategory) {
@@ -109,7 +110,7 @@ export async function PATCH(
       const reporter = await UserModel.findById(reporterId)
       
       // Get organization details
-      const organization = await OrganizationModel.findById(organizationId)
+      const organization = organizationId ? await OrganizationModel.findById(organizationId) : null
       
       if (reporter && organization) {
         // Get the actual employee ID from user_organizations table
@@ -117,7 +118,7 @@ export async function PATCH(
         let employeeId = null;
         
         if (assignedToUserId) {
-          employeeId = await UserOrganizationModel.getEmployeeId(assignedToUserId, organizationId);
+          employeeId = await UserOrganizationModel.getEmployeeId(assignedToUserId, organizationId as number);
         }
         
         // Get the employee ID of the user making the update
@@ -149,6 +150,17 @@ export async function PATCH(
     } catch (emailError) {
       console.error('Failed to send status update notification email:', emailError)
       // Continue with success response even if email fails
+    }
+
+    // WhatsApp: mirror the email notification for citizens who linked a number
+    try {
+      const reporterId = (currentIssue as any).reporterId || (currentIssue as any).reporter_id
+      const waReporter = await UserModel.findById(reporterId)
+      if (waReporter?.phone) {
+        await notifyStatusChange(waReporter.phone, issueId, currentIssue.title, status)
+      }
+    } catch (waError) {
+      console.error('WhatsApp status notification failed:', waError)
     }
 
     return NextResponse.json({

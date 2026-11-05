@@ -11,6 +11,7 @@ export interface User {
   role: 'CITIZEN' | 'ADMIN' | 'ORGANIZATION_ADMIN' | 'NGO_ADMIN';
   points: number;
   is_verified: boolean;
+  phone?: string | null;
   verification_token?: string;
   verification_token_expires?: Date;
   created_at: Date;
@@ -180,7 +181,7 @@ export class UserModel {
   }
 
   static async findById(id: number): Promise<User | null> {
-    const sql = 'SELECT id, email, name, role, points, is_verified, created_at, updated_at FROM users WHERE id = ?';
+    const sql = 'SELECT id, email, name, role, points, is_verified, phone, created_at, updated_at FROM users WHERE id = ?';
     return await Database.queryOne(sql, [id]);
   }
 
@@ -828,11 +829,12 @@ export class IssueModel {
              CASE WHEN i.is_anonymous = TRUE THEN 'CITIZEN' ELSE u.role END as reporter_role,
              (SELECT COUNT(*) FROM votes WHERE issue_id = i.id) as votes,
              (SELECT COUNT(*) FROM comments WHERE issue_id = i.id) as comments,
-             o.name as organization_name
+             (SELECT o.name FROM issue_assignments ia
+                JOIN organizations o ON ia.organization_id = o.id
+               WHERE ia.issue_id = i.id
+               ORDER BY ia.assigned_at DESC LIMIT 1) as organization_name
       FROM issues i
       JOIN users u ON i.reporter_id = u.id
-      LEFT JOIN issue_assignments ia ON i.id = ia.issue_id
-      LEFT JOIN organizations o ON ia.organization_id = o.id
       ${whereClause}
       ORDER BY i.created_at DESC, i.id DESC
       LIMIT ${limit} OFFSET ${offset}

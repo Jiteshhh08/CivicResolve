@@ -11,8 +11,15 @@ import { ollamaGenerate } from './ollama'
 // Perceptual hash (average hash, 16x16 grayscale → 256 bits)
 // ---------------------------------------------------------------------------
 
+// The form sends data URLs ("data:image/jpeg;base64,..."), so the prefix has to
+// come off before decoding — otherwise every hash is computed over the header.
+export function stripDataUri(input: string): string {
+  const marker = input.indexOf('base64,')
+  return marker >= 0 ? input.slice(marker + 7) : input
+}
+
 export async function hashImage(imageBase64: string): Promise<string> {
-  const { data } = await sharp(Buffer.from(imageBase64, 'base64'))
+  const { data } = await sharp(Buffer.from(stripDataUri(imageBase64), 'base64'))
     .resize(16, 16, { fit: 'fill' })
     .grayscale()
     .raw()

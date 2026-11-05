@@ -183,6 +183,12 @@ export async function getStreetImageNear(
 
 /** Downloads an image and returns its base64 (JPEG assumed). */
 export async function fetchImageAsBase64(url: string, maxBytes = 10 * 1024 * 1024): Promise<string> {
+  // Photos uploaded through the report form are stored inline as data URLs;
+  // there is nothing to fetch for those.
+  if (url.startsWith('data:')) {
+    const marker = url.indexOf('base64,')
+    return marker >= 0 ? url.slice(marker + 7) : ''
+  }
   // Stored URLs are site-relative ("/uploads/..."), and the worker has no request
   // to resolve them against — so resolve here, once, for every caller.
   const absolute = /^https?:\/\//i.test(url)

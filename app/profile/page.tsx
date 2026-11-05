@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { BADGES } from "@/lib/constants"
 import { useAuth } from "@/hooks/use-auth"
+import { WhatsAppLinkCard } from "@/components/whatsapp-link-card"
 import { formatTimeAgo } from "@/lib/date-utils"
 import type { Issue } from "@/lib/types"
 
@@ -293,6 +294,13 @@ export default function ProfilePage() {
                   </div>
                 </CardContent>
               </Card>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+            >
+              <WhatsAppLinkCard />
             </motion.div>
           </div>
 
