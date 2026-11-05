@@ -520,3 +520,44 @@ model AccountLink {
   @@index([phone])
   @@index([status])
 }
+
+// Every WhatsApp message, in and out. wamid is unique so Meta retries are
+// deduplicated at the database instead of in application code.
+model WaMessage {
+  id         Int      @id @default(autoincrement())
+  wamid      String   @unique @db.VarChar(191)
+  phone      String   @db.VarChar(20)
+  direction  String   @db.VarChar(3) // IN | OUT
+  type       String   @db.VarChar(20)
+  body       String?  @db.Text
+  media_id   String?  @db.VarChar(128)
+  status     String   @db.VarChar(16) @default("RECEIVED") // RECEIVED | SENT | DELIVERED | READ | FAILED
+  error      String?  @db.Text
+  created_at DateTime @default(now())
+
+  @@index([phone, created_at])
+  @@map("wa_messages")
+}
+
+// Per-number conversation metadata (24h window tracking, future state).
+model WaSession {
+  phone           String    @id @db.VarChar(20)
+  state           Json?
+  last_inbound_at DateTime?
+  updated_at      DateTime  @default(now()) @updatedAt
+
+  @@map("wa_sessions")
+}
+
+// One-time code the portal shows to a logged-in citizen; they send it to the
+// WhatsApp bot to prove both identities (portal session + phone possession).
+model WaLinkCode {
+  code      String    @id @db.VarChar(12)
+  userId    Int       @map("user_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+
+  @@index([userId])
+  @@map("wa_link_codes")
+}

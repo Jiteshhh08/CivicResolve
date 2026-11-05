@@ -319,13 +319,8 @@ export async function detectDuplicates(issueData: {
       )
       
       logger.info(`🔎 Checking issue #${issue.id}: distance=${distance.toFixed(2)}m`)
-      
-      // Skip if too far away
-      if (distance > config.distance_threshold_meters) {
-        logger.info(`  ❌ Skipped: too far (>${config.distance_threshold_meters}m)`)
-        continue
-      }
-      
+
+
       // Check if this pair should be ignored
       if (issueData.excludeIssueId) {
         const shouldIgnore = await shouldIgnorePair(issueData.excludeIssueId, issue.id)
@@ -338,9 +333,13 @@ export async function detectDuplicates(issueData: {
       // Calculate text similarity
       const titleSimilarity = calculateCombinedSimilarity(issueData.title, issue.title)
       const descriptionSimilarity = calculateCombinedSimilarity(issueData.description, issue.description)
-      
-      // Calculate location similarity (inverse of normalized distance)
-      const locationSimilarity = 1 - (distance / config.distance_threshold_meters)
+      // Titles carry the signal: two people describe the same pothole
+      // differently but name it the same way.
+      const textSimilarity = (titleSimilarity * 0.6) + (descriptionSimilarity * 0.4)
+
+      // Proximity is a bonus, not a gate: the same wording filed 800 m away is
+      // still the same complaint. Clamped at 0 beyond the configured radius.
+      const locationSimilarity = Math.max(0, 1 - (distance / config.distance_threshold_meters))
       
       // Calculate weighted overall similarity
       const overallSimilarity = 
@@ -356,8 +355,9 @@ export async function detectDuplicates(issueData: {
         threshold: config.similarity_threshold,
       })
       
-      // Add to possible duplicates if above threshold
-      if (overallSimilarity >= config.similarity_threshold) {
+      // Add to possible duplicates if above threshold. Text alone at 0.8 means
+      // the same wording was typed twice, wherever it was pinned.
+      if (overallSimilarity >= config.similarity_threshold || textSimilarity >= 0.72) {
         logger.info(`  ✅ DUPLICATE FOUND! (${(overallSimilarity * 100).toFixed(1)}%)`)
         possibleDuplicates.push({
           issueId: issue.id,

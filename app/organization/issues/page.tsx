@@ -29,8 +29,7 @@ interface Issue {
   updated_at: string
   address: string
   coordinates: { lat: number; lng: number }
-  images: string[]
-  image_url?: string  // Database field for issue image
+  imageUrl?: string | null  // what /api/organization/issues actually returns
   citizen_name: string
   citizen_email: string
   assigned_to?: string
@@ -500,7 +499,7 @@ export default function OrganizationIssues() {
                       </Link>
 
                       {/* Temporary: Show for all organization members to debug */}
-                      {((issue.images && issue.images.length > 0) || issue.image_url) && (
+                      {issue.imageUrl && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -607,7 +606,7 @@ export default function OrganizationIssues() {
       <AIAnalysisModal
         isOpen={aiAnalysisModal.isOpen}
         onClose={() => setAiAnalysisModal({ isOpen: false })}
-        imageUrl={aiAnalysisModal.issue?.image_url || (aiAnalysisModal.issue?.images && aiAnalysisModal.issue.images[0])}
+        imageUrl={aiAnalysisModal.issue?.imageUrl || undefined}
         issueId={aiAnalysisModal.issue?.id.toString()}
       />
     </div>

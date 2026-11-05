@@ -2,12 +2,12 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Send, ArrowLeft, Bot, Check, X, Edit, Camera, Upload } from "lucide-react"
+import { Send, ArrowLeft, Bot, Check, X, Edit, Camera, Upload, AlertTriangle } from "lucide-react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { PageHeader } from "@/components/ui/page-header"
@@ -74,6 +74,9 @@ export default function ReportIssuePage() {
 
   // Duplicate detection states
   const [possibleDuplicates, setPossibleDuplicates] = useState<any[]>([])
+  const [similarMatches, setSimilarMatches] = useState<any[]>([])
+  const [similarIsNearby, setSimilarIsNearby] = useState(false)
+  const [reusedMatches, setReusedMatches] = useState<any[]>([])
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false)
   const [pendingIssueData, setPendingIssueData] = useState<any>(null)
 
@@ -91,6 +94,40 @@ export default function ReportIssuePage() {
   const currentAddress = watch("address")
   const currentLatitude = watch("latitude")
   const currentLongitude = watch("longitude")
+  const watchedTitle = watch("title")
+  const watchedDescription = watch("description")
+
+  // Live duplicate check while typing: the same person filing twice, or a
+  // neighbour reporting the same pothole, should see it before submitting.
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      const title = (watchedTitle || "").trim()
+      if (title.length < 8 || !selectedCategory) {
+        setSimilarMatches([])
+        return
+      }
+      try {
+        const res = await fetch("/api/issues/similar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            description: watchedDescription || "",
+            category: selectedCategory,
+            latitude: Number(currentLatitude),
+            longitude: Number(currentLongitude),
+          }),
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        setSimilarMatches(Array.isArray(data.matches) ? data.matches : [])
+        setSimilarIsNearby(Boolean(data.fallback))
+      } catch {
+        // a failed check must never block the form
+      }
+    }, 700)
+    return () => clearTimeout(timer)
+  }, [watchedTitle, watchedDescription, selectedCategory, currentLatitude, currentLongitude])
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -145,6 +182,7 @@ export default function ReportIssuePage() {
   const analyzeImageWithAI = async (imageData: string) => {
     setIsAnalyzing(true)
     setAiSuggestions(null)
+    setReusedMatches([])
     setShowAiReview(false)
     setUseManualInput(false)
 
@@ -169,6 +207,7 @@ export default function ReportIssuePage() {
           return
         }
         if (guard.suggestedAction === 'warn_reused') {
+          setReusedMatches(Array.isArray(guard.reuseMatches) ? guard.reuseMatches : [])
           toast({
             title: 'This photo may already be reported',
             description: 'A very similar photo was submitted before. You can still continue.',
@@ -778,6 +817,86 @@ export default function ReportIssuePage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Reused-photo warning */}
+                  {reusedMatches.length > 0 && (
+                    <div className="rounded-lg border border-red-300 bg-red-50 p-4 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-red-900">
+                            This photo has already been submitted
+                          </p>
+                          <p className="text-xs text-red-800 mt-1">
+                            Reusing a photo for a second complaint is treated as a duplicate. Open the existing
+                            report and upvote it instead — that carries more weight than a copy.
+                          </p>
+                        </div>
+                      </div>
+                      <ul className="space-y-2">
+                        {reusedMatches.map((m: any) => (
+                          <li key={m.issueId}>
+                            <a
+                              href={`/issues/${m.issueId}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 hover:bg-white/70 transition-colors"
+                            >
+                              <span className="text-sm text-gray-900">#{m.issueId} · {m.title || 'Existing report'}</span>
+                              <span className="text-xs font-medium text-red-700">match {Math.round((1 - m.distance / 256) * 100)}%</span>
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Live duplicate preview */}
+                  {similarMatches.length > 0 && (
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-3">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-amber-900">
+                            {similarIsNearby
+                              ? similarMatches.length === 1
+                                ? "Another complaint is open near this spot"
+                                : `${similarMatches.length} complaints are open near this spot`
+                              : similarMatches.length === 1
+                                ? "A similar complaint is already open"
+                                : `${similarMatches.length} similar complaints are already open`}
+                          </p>
+                          <p className="text-xs text-amber-800 mt-1">
+                            {similarIsNearby
+                              ? "Check these before filing — if it is the same problem, open one and upvote it instead."
+                              : "If this is the same problem, open one and upvote it instead of filing a duplicate."}
+                          </p>
+                        </div>
+                      </div>
+                      <ul className="space-y-2">
+                        {similarMatches.map((m: any) => (
+                          <li key={m.id}>
+                            <a
+                              href={`/issues/${m.id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-start justify-between gap-3 rounded-md bg-white/80 px-3 py-2 hover:bg-white transition-colors"
+                            >
+                              <span className="text-sm text-gray-900">
+                                #{m.id} · {m.title}
+                                <span className="block text-xs text-gray-500 mt-0.5">{m.status}</span>
+                              </span>
+                              <span className="shrink-0 text-xs font-medium text-gray-500">
+                                {m.distanceMeters < 1000
+                                  ? `${Math.round(m.distanceMeters)} m away`
+                                  : `${(m.distanceMeters / 1000).toFixed(1)} km away`}
+                              </span>
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   {/* Submit Button */}
                   <Button

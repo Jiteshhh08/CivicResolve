@@ -62,6 +62,14 @@ export async function POST(request: NextRequest) {
       mimeType = header.split(';')[0].split(':')[1] || 'image/jpeg'
       console.log('- Extracted mime type:', mimeType)
       console.log('- Base64 data length after extraction:', imageBase64?.length)
+    } else if (imageData.startsWith('/')) {
+      // Seeded and resolved photos live on disk ("/uploads/issues/x.jpg"); the
+      // modal passes that path straight through.
+      const { readFile } = await import('fs/promises')
+      const path = await import('path')
+      const file = path.join(process.cwd(), 'public', imageData)
+      imageBase64 = (await readFile(file)).toString('base64')
+      mimeType = imageData.endsWith('.png') ? 'image/png' : 'image/jpeg'
     } else {
       console.log('- Image data does not start with data: URL, using as-is')
     }

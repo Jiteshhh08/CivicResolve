@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth-utils'
 import { IssueModel, UserModel, OrganizationModel, UserOrganizationModel, CategoryOrganizationMappingModel } from '@/lib/models'
 import { emailService } from '@/lib/email-service'
 import { serverCacheInvalidate } from '@/lib/server-cache'
+import { notifyStatusChange } from '@/lib/whatsapp-notify'
 
 export async function POST(
   request: NextRequest,
@@ -139,6 +140,17 @@ export async function POST(
     } catch (emailError) {
       console.error('Failed to send resolution notification email:', emailError)
       // Continue with success response even if email fails
+    }
+
+    // WhatsApp: mirror the resolution email when the reporter has a number
+    try {
+      const waReporterId = (currentIssue as any).reporterId || (currentIssue as any).reporter_id
+      const waReporter = await UserModel.findById(waReporterId)
+      if (waReporter?.phone) {
+        await notifyStatusChange(waReporter.phone, issueId, currentIssue.title, 'RESOLVED')
+      }
+    } catch (waError) {
+      console.error('WhatsApp resolution notification failed:', waError)
     }
 
     return NextResponse.json({

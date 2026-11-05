@@ -65,11 +65,11 @@ async function handler(req: NextRequest) {
 
   // 2) Reused-photo check (perceptual hash vs recent issue images)
   let imageHash = ''
-  let matches: { issueId: number; distance: number }[] = []
+  let matches: { issueId: number; title: string; distance: number }[] = []
   try {
     imageHash = await hashImage(base64)
-    const rows = await db.query<{ id: number; image_url: string }[]>(
-      `SELECT id, image_url FROM issues
+    const rows = await db.query<{ id: number; title: string; image_url: string }[]>(
+      `SELECT id, title, image_url FROM issues
        WHERE image_url IS NOT NULL AND image_url <> ''
          AND created_at >= NOW() - INTERVAL ${LOOKBACK_DAYS} DAY
        ORDER BY created_at DESC
@@ -82,7 +82,7 @@ async function handler(req: NextRequest) {
       ).catch(() => null)
       if (!other) continue
       const distance = hammingDistance(imageHash, await hashImage(other))
-      if (distance <= REUSE_HAMMING_THRESHOLD) matches.push({ issueId: row.id, distance })
+      if (distance <= REUSE_HAMMING_THRESHOLD) matches.push({ issueId: row.id, title: row.title, distance })
     }
   } catch (err) {
     console.error('✗ [check-photo] reuse check failed:', err instanceof Error ? err.message : err)
